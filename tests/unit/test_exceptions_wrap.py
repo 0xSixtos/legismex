@@ -60,3 +60,11 @@ def test_unrelated_exception_is_not_swallowed():
     with pytest.raises(ValueError):
         with wrap_httpx_errors():
             raise ValueError("unrelated")
+
+
+def test_request_error_without_request_keeps_typed_error():
+    with pytest.raises(LegismexConnectionError) as exc_info:
+        with wrap_httpx_errors():
+            raise httpx.ConnectError("No request attached")
+    assert "Error de conexión a ?" in str(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, httpx.ConnectError)

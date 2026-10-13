@@ -1,8 +1,11 @@
 import httpx
-import asyncio
 import re
+from html import unescape
+from urllib.parse import urlsplit
 from bs4 import BeautifulSoup
 from typing import List
+from legismex._http import fetch_pages
+
 from .models import DurangoPoEdicion
 
 
@@ -11,7 +14,10 @@ class DurangoPoClient:
 
     BASE_URL = "https://periodicooficial.durango.gob.mx"
 
-    def __init__(self, **kwargs):
+    def __init__(self, concurrency: int = 5, **kwargs):
+        if concurrency < 1:
+            raise ValueError("concurrency debe ser al menos 1")
+        self.concurrency = concurrency
         self.client_kwargs = {
             "timeout": 30.0,
             "verify": False,
@@ -44,21 +50,27 @@ class DurangoPoClient:
             vistos.add(uuid)
 
             # Subir o buscar el contexto del elemento para extraer títulos y fecha
-            parent = link.find_parent("div", class_=re.compile(r"grid-cols-6"))
+            parent = link.find_parent("div", class_=re.compile(r"\bgrid-cols-(?:6|12)\b"))
             if parent:
                 # Estructura de Lista
                 h3 = parent.find("h3")
                 fecha_span = parent.find_all("span", class_="text-gray-60")
 
-                titulo = h3.get_text(
-                    separator=" ", strip=True) if h3 else f"Edición {uuid[:8]}"
-                fecha = fecha_span[0].get_text(
-                    strip=True) if len(fecha_span) > 0 else "N/A"
-                pubs = fecha_span[1].get_text(
-                    strip=True) if len(fecha_span) > 1 else ""
+                cells = parent.find_all("div", recursive=False)
+                if "grid-cols-12" in parent.get("class", []) and len(cells) >= 3:
+                    titulo = cells[0].get_text(separator=" ", strip=True)
+                    fecha = cells[1].get_text(separator=" ", strip=True)
+                    pubs = cells[2].get_text(separator=" ", strip=True)
+                else:
+                    titulo = h3.get_text(
+                        separator=" ", strip=True) if h3 else f"Edición {uuid[:8]}"
+                    fecha = fecha_span[0].get_text(
+                        strip=True) if len(fecha_span) > 0 else "N/A"
+                    pubs = fecha_span[1].get_text(
+                        strip=True) if len(fecha_span) > 1 else ""
 
-                es_bis = "Bis" in titulo
-                es_extraordinario = "Ext" in titulo or "Extra" in titulo
+                es_bis = "bis" in titulo.lower()
+                es_extraordinario = "ext" in titulo.lower()
 
                 ediciones.append(DurangoPoEdicion(
                     uuid=uuid,
@@ -70,7 +82,7 @@ class DurangoPoClient:
                 ))
             else:
                 # Tratar de ver si está en una Card destacada
-                card = link.find_parent("article", class_="card-periodicos")
+                card = link.find_parent("article", class_=re.compile(r"^card-periodicos?$"))
                 if card:
                     h3 = card.find("h3")
                     time_tag = card.find("time")
@@ -93,13 +105,22 @@ class DurangoPoClient:
         return ediciones
 
     def _extraer_pdf(self, detail_html: str) -> str:
-        """Extrae el primer enlace al PDF alojado en S3 desde el HTML del Next.js bundle."""
+        """Extract the complete PDF URL, preserving temporary S3 signatures."""
+        soup = BeautifulSoup(detail_html, "html.parser")
+        for tag in soup.select("a[href], embed[src], iframe[src]"):
+            url = str(tag.get("href") or tag.get("src") or "")
+            if (
+                url.startswith("https://transp23.s3.amazonaws.com/")
+                and urlsplit(url).path.lower().endswith(".pdf")
+            ):
+                return url
+        # Older pages expose the URL only in the Next.js payload.
         links = re.findall(
-            r'https://transp23\.s3\.amazonaws\.com/[^\"]*\.pdf', detail_html)
-        # Evitar duplicados retornando el primero si existe
-        if links:
-            return links[0]
-        return ""
+            r'https://transp23\.s3\.amazonaws\.com/[^"\s<>\\]*\.pdf'
+            r'(?:\?[^"\s<>\\]*)?',
+            detail_html,
+        )
+        return unescape(links[0]) if links else ""
 
     # ----------- Síncronos -----------
 
@@ -113,6 +134,7 @@ class DurangoPoClient:
             # Obtener el PDF para cada edición (Síncrono N+1)
             for ed in ediciones:
                 det_resp = client.get(f"{self.BASE_URL}/periodicos/{ed.uuid}")
+                det_resp.raise_for_status()
                 ed.url_pdf = self._extraer_pdf(det_resp.text)
 
             return ediciones
@@ -126,13 +148,11 @@ class DurangoPoClient:
             resp.raise_for_status()
             ediciones = self._parsear_ediciones_lista(resp.text)
 
-            async def armar_edicion(ed: DurangoPoEdicion):
-                try:
-                    det = await client.get(f"{self.BASE_URL}/periodicos/{ed.uuid}")
-                    ed.url_pdf = self._extraer_pdf(det.text)
-                except httpx.RequestError:
-                    ed.url_pdf = ""
-                return ed
-
-            resultados = await asyncio.gather(*(armar_edicion(e) for e in ediciones))
-            return list(resultados)
+            responses = await fetch_pages(
+                client,
+                [(f"{self.BASE_URL}/periodicos/{ed.uuid}", None) for ed in ediciones],
+                concurrency=self.concurrency,
+            )
+            for edition, response in zip(ediciones, responses):
+                edition.url_pdf = self._extraer_pdf(response.text)
+            return ediciones

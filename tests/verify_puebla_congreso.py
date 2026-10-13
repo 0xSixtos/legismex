@@ -35,8 +35,10 @@ def test_puebla_congreso():
     except ImportError as e:
         print(f"Error: {e}")
         print("Asegúrate de haber corrido: pip install playwright && playwright install chromium")
+        raise
     except Exception as exc:
         print(f"Error inesperado en prueba de Puebla: {exc}")
+        raise
 
 
 if __name__ == "__main__":

@@ -36,9 +36,10 @@ def run_script(script_path):
             print(f"❌ ERROR ({elapsed:.1f}s)")
             print("-" * 40)
             # Solo los últimos 500 caracteres del error
-            print(result.stderr.strip()[-500:])
+            diagnostics = (result.stdout + result.stderr).strip()
+            print(diagnostics[-500:])
             print("-" * 40)
-            return False, result.stderr
+            return False, diagnostics
 
     except subprocess.TimeoutExpired:
         print("⏱️  TIMEOUT (Tomó más de 60s)")
@@ -85,7 +86,7 @@ def main():
 
     if not scripts:
         print(f"⚠️  No se encontraron pruebas para el patrón: {pattern}")
-        sys.exit(0)
+        sys.exit(1)
 
     print_header(
         f"🤖 Ejecutando Verificaciones Legismex ({len(scripts)} scripts)")

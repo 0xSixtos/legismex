@@ -30,6 +30,7 @@ def test_tabasco_iniciativas():
 
     except Exception as exc:
         print(f"Error en prueba de Iniciativas: {exc}")
+        raise
 
 
 if __name__ == "__main__":

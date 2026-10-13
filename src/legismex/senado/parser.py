@@ -1,5 +1,6 @@
 import re
 from typing import Optional
+from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 from legismex.senado.models import GacetaSenado, DocumentoSenado
 
@@ -14,12 +15,10 @@ class SenadoParser:
     def _limpiar_url(cls, href: str) -> Optional[str]:
         if not href:
             return None
-        if href.startswith('javascript:'):
+        href = href.strip()
+        if not href or href.lower().startswith(('javascript:', 'mailto:', '#')):
             return None
-        if href.startswith('http'):
-            return href.strip()
-        # Si es URL relativa, agregar el dominio del Senado
-        return f"{cls.BASE_URL}{href.strip()}"
+        return urljoin(f"{cls.BASE_URL}/", href)
 
     @classmethod
     def parse_gaceta_dia(cls, html: str) -> GacetaSenado:

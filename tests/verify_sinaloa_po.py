@@ -32,6 +32,7 @@ def test_sinaloa_po():
 
     except Exception as exc:
         print(f"Error en prueba de P.O.: {exc}")
+        raise
 
 
 if __name__ == "__main__":

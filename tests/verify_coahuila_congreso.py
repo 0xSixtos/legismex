@@ -20,6 +20,7 @@ def test_sync():
             print("---")
     except Exception as exc:
         print(f"Error Síncrono: {exc}")
+        raise
 
 
 async def test_async():
@@ -33,6 +34,7 @@ async def test_async():
             print("---")
     except Exception as exc:
         print(f"Error Asíncrono: {exc}")
+        raise
 
 if __name__ == "__main__":
     test_sync()

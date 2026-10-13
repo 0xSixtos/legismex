@@ -63,7 +63,14 @@ def wrap_httpx_errors(url: Optional[str] = None) -> Iterator[None]:
             f"HTTP {e.response.status_code} en {target}"
         ) from e
     except httpx.RequestError as e:
-        target = url or str(getattr(e.request, "url", "")) or "?"
+        if url:
+            target = url
+        else:
+            try:
+                target = str(e.request.url)
+            except RuntimeError:
+                # httpx errors may be raised before a Request is attached.
+                target = "?"
         raise LegismexConnectionError(
             f"Error de conexión a {target}: {e.__class__.__name__}: {e}"
         ) from e

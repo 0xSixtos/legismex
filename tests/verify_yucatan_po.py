@@ -34,6 +34,7 @@ def test_yucatan_po():
 
     except Exception as exc:
         print(f"Error en prueba de D.O.: {exc}")
+        raise
 
 
 if __name__ == "__main__":

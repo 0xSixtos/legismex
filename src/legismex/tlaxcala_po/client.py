@@ -1,14 +1,9 @@
 import httpx
 from bs4 import BeautifulSoup
 from typing import List, Optional
+from urllib.parse import urljoin
 from .models import TlaxcalaPoEdicion
 
-# Joomla page slug → actual year for URL construction
-# The site uses "2025-2" as the slug for 2026, "2025" for 2025, and "YYYY" for others
-_SLUG_MAP = {
-    2026: "2025-2",
-    2025: "2025",
-}
 
 
 class TlaxcalaPoClient:
@@ -34,8 +29,8 @@ class TlaxcalaPoClient:
 
     def _index_url(self, anio: int) -> str:
         """Return the direct iframe URL for a given year."""
-        slug = _SLUG_MAP.get(anio, str(anio))
-        return f"{self.INDEX_BASE}/{slug}.php"
+        # Joomla navigation slugs do not identify the embedded PHP index.
+        return f"{self.INDEX_BASE}/{anio}.php"
 
     def obtener_ediciones(
         self,
@@ -78,7 +73,7 @@ class TlaxcalaPoClient:
             contenido = tds[2].get_text(strip=True).strip('"').strip()
             a = tds[3].find("a")
             href = a.get("href", "").strip() if a else ""
-            url_pdf = f"{self.INDEX_BASE}/{href}" if href else None
+            url_pdf = urljoin(url, href) if href else None
 
             results.append(
                 TlaxcalaPoEdicion(

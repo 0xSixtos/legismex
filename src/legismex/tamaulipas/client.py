@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 import asyncio
 import httpx
 from bs4 import BeautifulSoup
@@ -26,13 +26,13 @@ class TamaulipasClient:
             **kwargs
         }
 
-    def _parse(self, html: str, legislatura: int | str) -> List[TamaulipasGaceta]:
+    def _parse(self, html: str, legislatura: Union[int, str]) -> List[TamaulipasGaceta]:
         """
         Analiza el HTML de la página de Gacetas de Tamaulipas y extrae los registros.
 
         Args:
             html (str): Contenido HTML de la página.
-            legislatura (int | str): Número de legislatura para asignar a los modelos.
+            legislatura (Union[int, str]): Número de legislatura para asignar a los modelos.
 
         Returns:
             List[TamaulipasGaceta]: Lista de modelos de las gacetas encontradas.
@@ -82,12 +82,12 @@ class TamaulipasClient:
 
         return gacetas
 
-    def obtener_gacetas(self, legislatura: int | str = 66) -> List[TamaulipasGaceta]:
+    def obtener_gacetas(self, legislatura: Union[int, str] = 66) -> List[TamaulipasGaceta]:
         """
         Obtiene de forma síncrona el listado de gacetas parlamentarias de una legislatura.
 
         Args:
-            legislatura (int | str): Número de la legislatura a consultar.
+            legislatura (Union[int, str]): Número de la legislatura a consultar.
 
         Returns:
             List[TamaulipasGaceta]: Lista de gacetas correspondientes.
@@ -101,12 +101,12 @@ class TamaulipasClient:
 
         return self._parse(html, legislatura)
 
-    async def a_obtener_gacetas(self, legislatura: int | str = 66) -> List[TamaulipasGaceta]:
+    async def a_obtener_gacetas(self, legislatura: Union[int, str] = 66) -> List[TamaulipasGaceta]:
         """
         Obtiene de forma asíncrona el listado de gacetas parlamentarias de una legislatura.
 
         Args:
-            legislatura (int | str): Número de la legislatura a consultar.
+            legislatura (Union[int, str]): Número de la legislatura a consultar.
 
         Returns:
             List[TamaulipasGaceta]: Lista de gacetas correspondientes.

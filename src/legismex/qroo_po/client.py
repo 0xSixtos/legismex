@@ -1,9 +1,11 @@
 import httpx
-import asyncio
 from bs4 import BeautifulSoup
 from typing import List
-from datetime import datetime, date
+from datetime import date
 import calendar
+from urllib.parse import urljoin
+
+from legismex._http import fetch_pages
 
 from .models import QrooPoPublicacion
 
@@ -12,7 +14,10 @@ class QrooPoClient:
     """Cliente para el Periódico Oficial del Estado de Quintana Roo."""
     BASE_URL = "http://po.segob.qroo.gob.mx/sitiopo"
 
-    def __init__(self, **kwargs):
+    def __init__(self, concurrency: int = 5, **kwargs):
+        if concurrency < 1:
+            raise ValueError("concurrency debe ser al menos 1")
+        self.concurrency = concurrency
         self.client_kwargs = {
             "timeout": 30.0,
             "verify": False,
@@ -42,50 +47,39 @@ class QrooPoClient:
         soup = BeautifulSoup(html, "html.parser")
         resultados = []
 
-        tables = soup.find_all("table")
-        if len(tables) > 1:
-            table = tables[1]
-            rows = table.find_all("tr")
-            # Ignoramos la cabecera (index 0)
-            for row in rows[1:]:
-                cols = row.find_all("td")
-                if len(cols) > 2:
-                    try:
-                        # Estructura: [0:Ver, 1:PDF, 2:Dia, 3:Mes, 4:Anio, 5:Tipo, 6:Numero, 7:Tomo, 8:Epoca, 9:Indices]
-                        link_tag = cols[1].find("a")
-                        if not link_tag:
-                            continue
+        meses_es = {
+            "enero": 1, "febrero": 2, "marzo": 3, "abril": 4,
+            "mayo": 5, "junio": 6, "julio": 7, "agosto": 8,
+            "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12,
+        }
+        # The publication table is now the only table on the page. Identify
+        # data rows by their columns instead of assuming a second table.
+        for row in soup.select("table tr"):
+            cols = row.find_all("td", recursive=False)
+            if len(cols) < 8:
+                continue
+            link_tag = cols[1].find("a", href=True)
+            if not link_tag:
+                continue
+            try:
+                mes_num = meses_es.get(cols[3].get_text(strip=True).lower())
+                if mes_num is None:
+                    continue
+                fecha = date(
+                    int(cols[4].get_text(strip=True)),
+                    mes_num,
+                    int(cols[2].get_text(strip=True)),
+                )
+                resultados.append(QrooPoPublicacion(
+                    fecha=fecha,
+                    tipo=cols[5].get_text(strip=True),
+                    numero=cols[6].get_text(strip=True),
+                    tomo=cols[7].get_text(strip=True),
+                    url_pdf=urljoin(f"{self.BASE_URL}/", link_tag["href"]),
+                ))
+            except (ValueError, TypeError):
+                continue
 
-                        # Limpiar href url
-                        href = link_tag.get("href", "")
-                        url_pdf = f"{self.BASE_URL}/{href}" if not href.startswith(
-                            "http") else href
-
-                        dia_str = cols[2].get_text(strip=True)
-                        anio_str = cols[4].get_text(strip=True)
-
-                        # Mapear mes texto a int
-                        meses_es = {"Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6,
-                                    "Julio": 7, "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12}
-                        mes_str = cols[3].get_text(strip=True)
-
-                        mes_num = meses_es.get(mes_str.capitalize(), 1)
-                        fecha = date(int(anio_str), mes_num, int(dia_str))
-
-                        tipo = cols[5].get_text(strip=True)
-                        numero = cols[6].get_text(strip=True)
-                        tomo = cols[7].get_text(strip=True)
-
-                        pub = QrooPoPublicacion(
-                            fecha=fecha,
-                            tipo=tipo,
-                            numero=numero,
-                            tomo=tomo,
-                            url_pdf=url_pdf
-                        )
-                        resultados.append(pub)
-                    except Exception:
-                        pass
         return resultados
 
     def _obtener_total_paginas(self, html: str) -> int:
@@ -98,7 +92,7 @@ class QrooPoClient:
             select = pag.find("select", {"name": "Pagina"})
             if select:
                 opts = select.find_all("option")
-                return len(opts)
+                return max(len(opts), 1)
         return 1
 
     def obtener_publicaciones(self, anio: int, mes: int) -> List[QrooPoPublicacion]:
@@ -121,9 +115,9 @@ class QrooPoClient:
             for p in range(2, total_paginas + 1):
                 params_p = self._preparar_parametros(anio, mes, p)
                 resp_p = client.get(url, params=params_p)
-                if resp_p.status_code == 200:
-                    publicaciones.extend(
-                        self._extraer_publicaciones_de_html(resp_p.text))
+                resp_p.raise_for_status()
+                publicaciones.extend(
+                    self._extraer_publicaciones_de_html(resp_p.text))
 
         return publicaciones
 
@@ -144,16 +138,16 @@ class QrooPoClient:
             total_paginas = self._obtener_total_paginas(html)
 
             if total_paginas > 1:
-                tareas = []
-                for p in range(2, total_paginas + 1):
-                    params_p = self._preparar_parametros(anio, mes, p)
-                    tareas.append(client.get(url, params=params_p))
-
-                respuestas = await asyncio.gather(*tareas, return_exceptions=True)
-                for resp_p in respuestas:
-                    if isinstance(resp_p, httpx.Response) and resp_p.status_code == 200:
-                        publicaciones.extend(
-                            self._extraer_publicaciones_de_html(resp_p.text))
+                requests = [
+                    (url, self._preparar_parametros(anio, mes, page))
+                    for page in range(2, total_paginas + 1)
+                ]
+                respuestas = await fetch_pages(
+                    client, requests, concurrency=self.concurrency
+                )
+                for response in respuestas:
+                    publicaciones.extend(
+                        self._extraer_publicaciones_de_html(response.text))
 
         # Evitar traslape ordenando todo
         publicaciones.sort(key=lambda x: x.fecha, reverse=True)

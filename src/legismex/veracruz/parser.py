@@ -1,5 +1,5 @@
 import re
-from typing import List
+from typing import List, Optional
 from bs4 import BeautifulSoup
 from .models import VeracruzSesion, VeracruzDocumento
 
@@ -10,7 +10,7 @@ class VeracruzParser:
     """
 
     @staticmethod
-    def _clean_url(href: str) -> str | None:
+    def _clean_url(href: str) -> Optional[str]:
         """Extrae o limpia el URL. Las descargas usan javascript:PDF() 
         o URLs relativos de forma inconsistente."""
         if not href:
@@ -47,7 +47,7 @@ class VeracruzParser:
 
             current_anio_ejercicio = ""
             current_periodo = ""
-            current_sesion: VeracruzSesion | None = None
+            current_sesion: Optional[VeracruzSesion] = None
 
             for tr in table.select("tbody tr"):
                 tds = tr.find_all("td")

@@ -1,3 +1,5 @@
+from typing import Union
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -5,7 +7,7 @@ class TamaulipasGaceta(BaseModel):
     """Representa un registro de la Gaceta Parlamentaria del Congreso de Tamaulipas."""
     model_config = ConfigDict(populate_by_name=True)
 
-    legislatura: int | str
+    legislatura: Union[int, str]
     publicado_el: str
     numero: str
     tomo: str

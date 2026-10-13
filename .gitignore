@@ -13,3 +13,10 @@ build/
 *.html
 *.pdf
 /tmp/
+
+# Keep regression HTML fixtures and ignore generated test reports.
+!tests/unit/fixtures/*.html
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml

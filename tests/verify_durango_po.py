@@ -12,6 +12,8 @@ async def run_tests():
     print("--- 1. Obtener Ediciones Pagina 1 ---")
     ediciones = await client.a_obtener_ediciones(pagina=1)
     print(f"Total ediciones recuperadas: {len(ediciones)}")
+    if not ediciones:
+        raise RuntimeError("No se encontraron ediciones de Durango en la primera página")
 
     for idx, e in enumerate(ediciones[:3]):
         print(f"Edición {idx+1}:")

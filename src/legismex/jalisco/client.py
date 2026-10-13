@@ -58,6 +58,7 @@ class JaliscoClient:
 
                 with wrap_httpx_errors(url_orden):
                     res_orden = client.get(url_orden)
+                    res_orden.raise_for_status()
                 if res_orden.status_code == 200:
                     puntos_data = parse_orden_dia(res_orden.text)
 
@@ -79,6 +80,7 @@ class JaliscoClient:
                             if url_sub:
                                 with wrap_httpx_errors(url_sub):
                                     res_sub = client.get(url_sub)
+                                    res_sub.raise_for_status()
                                 if res_sub.status_code == 200:
                                     punto_obj.documentos = parse_subpuntos(
                                         res_sub.text)

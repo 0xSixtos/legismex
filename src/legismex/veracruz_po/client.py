@@ -1,6 +1,6 @@
 import httpx
 from bs4 import BeautifulSoup
-from typing import List
+from typing import List, Union
 import urllib.parse
 from .models import VeracruzPoEdicion
 from legismex.exceptions import wrap_httpx_errors
@@ -64,7 +64,7 @@ class VeracruzPoClient:
 
         return ediciones
 
-    def obtener_ediciones(self, anio: int | str, mes: int | str) -> List[VeracruzPoEdicion]:
+    def obtener_ediciones(self, anio: Union[int, str], mes: Union[int, str]) -> List[VeracruzPoEdicion]:
         """Obtiene las publicaciones de la Gaceta Oficial de Veracruz para un año y mes (1-12)."""
         mes_str = str(mes).zfill(2)
         anio_str = str(anio)
@@ -75,7 +75,7 @@ class VeracruzPoClient:
             response.raise_for_status()
             return self._parse(response.text)
 
-    async def a_obtener_ediciones(self, anio: int | str, mes: int | str) -> List[VeracruzPoEdicion]:
+    async def a_obtener_ediciones(self, anio: Union[int, str], mes: Union[int, str]) -> List[VeracruzPoEdicion]:
         """Versión asíncrona de :meth:`obtener_ediciones`."""
         mes_str = str(mes).zfill(2)
         anio_str = str(anio)

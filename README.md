@@ -149,3 +149,68 @@ Si deseas agregar un nuevo estado o mejorar uno existente, nuestra comunidad es 
 
 Revisa nuestra guía de contribución en **[CONTRIBUTING.md](CONTRIBUTING.md)** para conocer las convenciones de estructuración y código.
 
+
+## Comprobaciones y correcciones de extracción
+
+`pytest` ejecuta las pruebas unitarias de `tests/unit`, con respuestas HTTP
+simuladas y fixtures del HTML actual. Los scripts con consultas reales siguen en
+`tests/` y se ejecutan explícitamente con `verify.py`:
+
+```bash
+pytest
+python verify.py --estado durango --modulo po
+python verify.py --estado tlaxcala --modulo po
+python verify.py --estado campeche --modulo po
+python verify.py --estado qroo --modulo po
+python verify.py --all
+```
+
+La integración continua ahora ejecuta las pruebas unitarias y comprueba las
+importaciones en Python 3.9–3.12. Las anotaciones de Tamaulipas y Veracruz se
+corrigieron para mantener el soporte declarado de Python 3.9; los modelos
+requieren Pydantic 2.
+
+La revisión del 12 de octubre de 2026 encontró y corrigió:
+
+- **Durango PO:** el portal cambió a filas `grid-cols-12`; antes devolvía cero
+  ediciones. La primera página recupera 20 ediciones y sus enlaces PDF.
+  También se conserva la firma temporal `X-Amz-*` de las URLs de S3: antes
+  se eliminaba la parte posterior a `.pdf`, causando 403 al descargar. Se
+  comprobó la descarga completa de un PDF de 14,033,285 bytes. Las URLs
+  firmadas caducan; vuelve a consultar la edición para obtener una URL nueva.
+- **Tlaxcala PO:** el índice de 2026 es `indices/2026.php`; el cliente utilizaba
+  un slug de Joomla (`2025-2`) y recibía 404. Se recuperaron 617 publicaciones.
+- **Quintana Roo PO:** la tabla de publicaciones ya no es la segunda tabla del
+  HTML. Se recuperaron 22 publicaciones de marzo de 2026 con el nuevo parser.
+- **Campeche/Quintana Roo PO y Durango PO:** las consultas asíncronas usan un
+  límite `concurrency=5`, configurable en el constructor. Una página o detalle
+  fallido provoca una excepción, en lugar de devolver una lista incompleta como
+  si estuviera completa. Quintana Roo aplica la misma comprobación HTTP en su
+  variante síncrona.
+- **Jalisco:** los errores HTTP al obtener órdenes del día o subpuntos ahora se
+  propagan como `APIResponseError`.
+- **DOF/Senado:** los enlaces absolutos, relativos y relativos al protocolo se
+  normalizan correctamente. Los errores de conexión sin una petición asociada
+  mantienen su excepción `LegismexConnectionError`.
+- **Verificación:** los errores capturados por los scripts se vuelven a lanzar
+  para que el monitor reciba un código de salida distinto de cero. Un estado
+  sin scripts coincidentes también devuelve error. El runner conserva tanto
+  stdout como stderr en el diagnóstico.
+
+Las consultas federales adicionales devolvieron 11 documentos del DOF y 76
+periodos de votación de Diputados; Jalisco devolvió 2,314 fechas del calendario
+y Nuevo León, 3,114 iniciativas.
+
+En la auditoría inicial se ejecutaron 44 scripts: seis imprimieron errores y,
+incorrectamente, terminaron con código cero. El código de salida cero por sí
+solo no garantiza que el parser haya encontrado documentos.
+
+Persisten limitaciones externas observadas en este entorno: **Morelos Congreso**,
+**Sonora PO** y **Senado** devolvieron 403; los dominios utilizados por **Michoacán PO** y
+**BCS PO** tuvieron fallos de resolución DNS. El portal actual de Michoacán en
+`periodicooficial.segob.michoacan.gob.mx/periodico/portal/` utiliza otro backend,
+por lo que el cliente histórico WP-Filebase requiere una migración adicional.
+**Puebla Congreso** y **Consejería CDMX** requieren el extra `consejeria` y
+Chromium, que no se instalaron durante esta revisión. Estos casos no están
+verificados como operativos; los conteos anteriores corresponden a consultas
+concretas, no a todo el catálogo ni a descargas completas de todos los PDF.

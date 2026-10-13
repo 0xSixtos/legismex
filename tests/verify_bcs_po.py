@@ -12,6 +12,7 @@ def test_sync():
             print(f"- {e.numero} ({e.fecha}): {e.url_pdf}")
     except Exception as e:
         print(f"Error en síncrono: {e}")
+        raise
 
 
 async def test_async():
@@ -24,6 +25,7 @@ async def test_async():
             print(f"- {e.numero} ({e.fecha}): {e.url_pdf}")
     except Exception as e:
         print(f"Error en asíncrono: {e}")
+        raise
 
 if __name__ == "__main__":
     test_sync()

@@ -1,8 +1,9 @@
 import httpx
-import asyncio
 from bs4 import BeautifulSoup
 from typing import List, Optional
 from datetime import datetime
+
+from legismex._http import fetch_pages
 
 from .models import CampechePoPublicacion
 
@@ -11,13 +12,16 @@ class CampechePoClient:
     """Cliente para extraer actas del Periódico Oficial del Estado de Campeche."""
     BASE_URL = "http://periodicooficial.campeche.gob.mx/sipoec/public/documentos"
 
-    def __init__(self, **kwargs):
+    def __init__(self, concurrency: int = 5, **kwargs):
         """
         Inicializa el cliente del PO de Campeche.
 
         Args:
             **kwargs: Argumentos adicionales para httpx.Client o AsyncClient.
         """
+        if concurrency < 1:
+            raise ValueError("concurrency debe ser al menos 1")
+        self.concurrency = concurrency
         self.client_kwargs = {
             "verify": False,
             "timeout": 30.0,
@@ -151,14 +155,14 @@ class CampechePoClient:
                 resultados = self._parsear_html(resp.text)
 
                 if total_paginas > 1:
-                    tareas = []
-                    for page in range(2, total_paginas + 1):
-                        url = f"{self.BASE_URL}?anio={anio}&page={page}"
-                        tareas.append(client.get(url))
-
-                    respuestas = await asyncio.gather(*tareas, return_exceptions=True)
-                    for r in respuestas:
-                        if isinstance(r, httpx.Response) and r.status_code == 200:
-                            resultados.extend(self._parsear_html(r.text))
+                    requests = [
+                        (f"{self.BASE_URL}?anio={anio}&page={page}", None)
+                        for page in range(2, total_paginas + 1)
+                    ]
+                    respuestas = await fetch_pages(
+                        client, requests, concurrency=self.concurrency
+                    )
+                    for response in respuestas:
+                        resultados.extend(self._parsear_html(response.text))
 
                 return resultados

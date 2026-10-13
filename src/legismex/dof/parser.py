@@ -1,3 +1,5 @@
+from urllib.parse import urljoin
+
 from bs4 import BeautifulSoup
 from legismex.dof.models import DofEdicion, DofDocumento
 
@@ -58,12 +60,8 @@ class DofParser:
             enlace = tr.find('a', class_='enlaces')
             if enlace and 'nota_detalle.php' in enlace.get('href', ''):
                 url_relativa = enlace['href'].strip()
-                # Hacer la URL absoluta
-                if url_relativa.startswith('/'):
-                    url_absoluta = f"https://www.dof.gob.mx{url_relativa}"
-                else:
-                    url_absoluta = f"https://www.dof.gob.mx/{url_relativa}"
-                
+                url_absoluta = urljoin("https://www.dof.gob.mx/", url_relativa)
+
                 titulo = enlace.get_text(strip=True)
 
                 # El DOF suele exponer el PDF equivalente cambiando el endpoint

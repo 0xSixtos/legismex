@@ -33,6 +33,7 @@ def test_aguascalientes_congreso():
 
     except Exception as exc:
         print(f"Error en prueba de Congreso: {exc}")
+        raise
 
 
 if __name__ == "__main__":
